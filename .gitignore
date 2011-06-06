@@ -21,3 +21,4 @@ ipch/
 bin/
 libs/*.dll
 ignore/
+*.bak

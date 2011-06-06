@@ -15,6 +15,7 @@ DLCapture::DLCapture()
     mPreviewHeight = -1;
     capture_workers.size_controller().resize(3);
     conversion_workers.size_controller().resize(mNumCores);
+	CreateLookupTables();
 }
 
 DLCapture::~DLCapture()
@@ -177,36 +178,51 @@ void
 DLCapture::YuvToRgbChunk(BYTE *yuv, boost::shared_ptr<DLFrame> rgb, unsigned int offset, unsigned int chunk_size)
 {
     // convert 4 YUV macropixels to 6 RGB pixels
-    BYTE u, y1, v, y2;
-    // unsigned int j = 0;
 	unsigned int i, j;
     unsigned int boundry = offset + chunk_size;
-    double val = 0;
+	int yy, uu, vv, ug_plus_vg, ub, vr;
+	int r,g,b;
     for(i=offset, j=(offset/4)*6; i<boundry; i+=4, j+=6){
-        u = yuv[i];
-        y1  = yuv[i+1];
-        v = yuv[i+2];
-        y2  = yuv[i+3];
-
-        // bytes are reversed BGR
-        rgb->pixels[j]   = Clamp(1.164 * (y1 - 16) + 2.115 * (v - 128));
-        rgb->pixels[j+1] = Clamp(1.164 * (y1 - 16) - 0.534 * (u - 128) - 0.213 * (v - 128));
-        rgb->pixels[j+2] = Clamp(1.164 * (y1 - 16) + 1.793 * (u - 128));
-
-        rgb->pixels[j+3] = Clamp(1.164 * (y2 - 16) + 2.115 * (v - 128));
-        rgb->pixels[j+4] = Clamp(1.164 * (y2 - 16) - 0.534 * (u - 128) - 0.213 * (v - 128));
-        rgb->pixels[j+5] = Clamp(1.164 * (y2 - 16) + 1.793 * (u - 128));
-        // j+=6;
+		yy = yuv[i+1] << 8;
+		uu = yuv[i] - 128;
+		vv = yuv[i+2] - 128;
+		ug_plus_vg = uu * 88 + vv * 183;
+		ub = uu * 454;
+		vr = vv * 359;
+		r = (yy + vr) >> 8;
+		g = (yy - ug_plus_vg) >> 8;
+		b = (yy + ub) >> 8;
+		rgb->pixels[j]   = r < 0 ? 0 : (r > 255 ? 255 : (unsigned char)r);
+		rgb->pixels[j+1] = g < 0 ? 0 : (g > 255 ? 255 : (unsigned char)g);
+		rgb->pixels[j+2] = b < 0 ? 0 : (b > 255 ? 255 : (unsigned char)b);
+		yy = yuv[i+3] << 8;
+		r = (yy + vr) >> 8;
+		g = (yy - ug_plus_vg) >> 8;
+		b = (yy + ub) >> 8;
+		rgb->pixels[j+3] = r < 0 ? 0 : (r > 255 ? 255 : (unsigned char)r);
+		rgb->pixels[j+4] = g < 0 ? 0 : (g > 255 ? 255 : (unsigned char)g);
+		rgb->pixels[j+5] = b < 0 ? 0 : (b > 255 ? 255 : (unsigned char)b);
     }
 }
 
 
-unsigned int
+inline unsigned int
 DLCapture::Clamp(double value)
 {
     if(value > 255.0) return 255;
     if(value < 0.0)   return 0;
     return (unsigned int) value;
+}
+
+void
+DLCapture::CreateLookupTables(void){
+	for(int i=0; i<256; i++) {
+		mYLookup[i] = 1.164 * (i - 16);
+		mU1Lookup[i] = 0.534 * (i - 128);
+		mU2Lookup[i] = 1.793 * (i - 128);
+		mV1Lookup[i] = 2.115 * (i - 128);
+		mV2Lookup[i] = 0.213 * (i - 128);
+	}
 }
 
 shared_ptr<DLFrame>

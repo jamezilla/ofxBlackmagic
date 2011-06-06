@@ -55,6 +55,7 @@ private:
 	void                            YuvToRgbChunk(BYTE *yuv, boost::shared_ptr<DLFrame> rgb, unsigned int offset, unsigned int chunk_size);
     boost::shared_ptr<DLFrame>      Resize(boost::shared_ptr<DLFrame> src, int targetWidth, int targetHeight);
     void            InitialiseDimensions(IDeckLinkVideoInputFrame* pArrivedFrame);
+	void			CreateLookupTables(void);
     unsigned int    Clamp(double value);
 
     int             mDropNumFrames;
@@ -68,6 +69,12 @@ private:
     // BMDFrameFlags   mFlags;
     bool            mDimensionsInitialized;
     int             mNumCores;
+	
+	double				mYLookup[256];
+	double				mU1Lookup[256];
+	double				mU2Lookup[256];
+	double				mV1Lookup[256];
+	double				mV2Lookup[256];
 
     boost::threadpool::pool capture_workers;
     boost::threadpool::pool conversion_workers;
