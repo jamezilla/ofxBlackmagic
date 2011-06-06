@@ -1,0 +1,46 @@
+ofxBlackmagic is an openframeworks extension wrapping the native
+Blackmagic Designs Decklink API. It can be used to do real-time HDV
+capture with a Blackmagic Intensity Pro card. It has not been tested
+with any of the other Blackmagic Designs cards, but it should work
+fine.
+
+
+This extension has external binary dependencies on:
+    OpenCv          (included in openframeworks)
+    Boost Threads   (recommend installing Boost Pro - http://www.boostpro.com/download/)
+
+This extension has external header file dependencies on:
+    Boost Shared Pointer   (recommend installing Boost Pro - http://www.boostpro.com/download/)
+
+
+
+####################################
+    Visual Studio Configuration
+####################################
+
+------------------------------------
+    Common Debug/Release Config
+------------------------------------
+
+Configuration Properties -> C/C++ -> Preprocessor -> Preprocessor Definitions:
+  BOOST_ALL_DYN_LINK
+  BOOST_ALL_NO_LIB
+
+    
+
+------------------------------------
+    Debug Config
+------------------------------------
+
+Configuration Properties -> Build Events -> Post-Build Event:
+  xcopy /i /y /d "C:\Program Files (x86)\boost\boost_1_44\lib\boost_date_time-vc90-mt-gd-1_44.dll" "$(OutDir)"
+  xcopy /i /y /d "C:\Program Files (x86)\boost\boost_1_44\lib\boost_thread-vc90-mt-gd-1_44.dll" "$(OutDir)"
+
+
+------------------------------------
+    Release Config
+------------------------------------
+
+Configuration Properties -> Build Events -> Post-Build Event:
+  xcopy /i /y /d "C:\Program Files (x86)\boost\boost_1_44\lib\boost_date_time-vc90-mt-1_44.dll" "$(OutDir)"
+  xcopy /i /y /d "C:\Program Files (x86)\boost\boost_1_44\lib\boost_thread-vc90-mt-1_44.dll" "$(OutDir)"
