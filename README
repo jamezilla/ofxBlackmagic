@@ -12,6 +12,7 @@ This extension has external binary dependencies on:
 This extension has external header file dependencies on:
     Boost Shared Pointer   (recommend installing Boost Pro - http://www.boostpro.com/download/)
 
+When installing Boost Pro, make sure to include the multi-threaded DLL and multi-threaded debug DLL installs.
 
 
 ####################################
@@ -22,6 +23,15 @@ This extension has external header file dependencies on:
     Common Debug/Release Config
 ------------------------------------
 
+Configuration Properties -> C/C++ -> General -> Additional Include Directories:
+  ..\..\..\addons\ofxBlackmagic\src
+  ..\..\..\addons\ofxOpenCv\libs\include\opencv\include
+  <path to boost headers> (e.g. C:\Program Files\boost\boost_1_44)
+
+Configuration Properties -> Linker -> General:
+  ..\..\..\addons\ofxOpenCv\libs\opencv\lib\vs2008
+  <path to boost libs> (e.g. C:\Program Files (x86)\boost\boost_1_44\lib)
+  
 Configuration Properties -> C/C++ -> Preprocessor -> Preprocessor Definitions:
   BOOST_ALL_DYN_LINK
   BOOST_ALL_NO_LIB
@@ -32,6 +42,13 @@ Configuration Properties -> C/C++ -> Preprocessor -> Preprocessor Definitions:
     Debug Config
 ------------------------------------
 
+Configuration Properties -> Linker -> Input -> Additional Dependencies:
+  boost_thread-vc90-mt-gd-1_44.lib
+  boost_date_time-vc90-mt-gd-1_44.lib
+  comsuppw.lib
+  cv110.lib
+  cxcore110.lib
+
 Configuration Properties -> Build Events -> Post-Build Event:
   xcopy /i /y /d "C:\Program Files (x86)\boost\boost_1_44\lib\boost_date_time-vc90-mt-gd-1_44.dll" "$(OutDir)"
   xcopy /i /y /d "C:\Program Files (x86)\boost\boost_1_44\lib\boost_thread-vc90-mt-gd-1_44.dll" "$(OutDir)"
@@ -40,6 +57,13 @@ Configuration Properties -> Build Events -> Post-Build Event:
 ------------------------------------
     Release Config
 ------------------------------------
+
+Configuration Properties -> Linker -> Input -> Additional Dependencies:
+  boost_thread-vc90-mt-1_44.lib
+  boost_date_time-vc90-mt-1_44.lib
+  comsuppw.lib
+  cv110.lib
+  cxcore110.lib
 
 Configuration Properties -> Build Events -> Post-Build Event:
   xcopy /i /y /d "C:\Program Files (x86)\boost\boost_1_44\lib\boost_date_time-vc90-mt-1_44.dll" "$(OutDir)"

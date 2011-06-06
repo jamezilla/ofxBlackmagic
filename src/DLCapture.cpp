@@ -13,9 +13,8 @@ DLCapture::DLCapture()
     mDropNumFrames = 0;
     mPreviewWidth = -1;
     mPreviewHeight = -1;
-    capture_workers.size_controller().resize(3);
     conversion_workers.size_controller().resize(mNumCores);
-	CreateLookupTables();
+	/*CreateLookupTables();*/
 }
 
 DLCapture::~DLCapture()
@@ -213,17 +212,17 @@ DLCapture::Clamp(double value)
     if(value < 0.0)   return 0;
     return (unsigned int) value;
 }
-
-void
-DLCapture::CreateLookupTables(void){
-	for(int i=0; i<256; i++) {
-		mYLookup[i] = 1.164 * (i - 16);
-		mU1Lookup[i] = 0.534 * (i - 128);
-		mU2Lookup[i] = 1.793 * (i - 128);
-		mV1Lookup[i] = 2.115 * (i - 128);
-		mV2Lookup[i] = 0.213 * (i - 128);
-	}
-}
+//
+//void
+//DLCapture::CreateLookupTables(void){
+//	for(int i=0; i<256; i++) {
+//		mYLookup[i] = 1.164 * (i - 16);
+//		mU1Lookup[i] = 0.534 * (i - 128);
+//		mU2Lookup[i] = 1.793 * (i - 128);
+//		mV1Lookup[i] = 2.115 * (i - 128);
+//		mV2Lookup[i] = 0.213 * (i - 128);
+//	}
+//}
 
 shared_ptr<DLFrame>
 DLCapture::Resize(shared_ptr<DLFrame> src, int targetWidth, int targetHeight)

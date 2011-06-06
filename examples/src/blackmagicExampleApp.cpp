@@ -40,12 +40,10 @@ void BlackmagicExampleApp::draw(){
 
 	ofFill();
 	ofSetColor(0x333333);
-	ofRect(10,10,300,40);
+	ofRect(10,10,300,30);
 	ofSetColor(0x00ff00);
 	// display the actual rate of capture
 	ofDrawBitmapString("Capture Framerate:   " + ofToString(mVidGrabber.getFrameRate()), 20, 30);
-	// display the size of the capture queue - it should be at or near zero if your code is keeping up with capture
-	//ofDrawBitmapString("Capture Queue Depth: " + ofToString(mVidGrabber.getQueueDepth()), 20, 40);
 }
 
 //--------------------------------------------------------------
