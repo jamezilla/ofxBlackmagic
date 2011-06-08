@@ -26,6 +26,8 @@ public:
     ofxBlackmagic   mVidGrabber;
     ofImage         mGrayscaleImage;
 
+    bool            mZoom;
+
 };
 
 #endif

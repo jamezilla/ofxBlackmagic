@@ -2,7 +2,9 @@
 #include <iomanip>
 #include <queue>
 
+#include "ofTexture.h"
 #include "ofxBlackmagic.h"
+#include "DLCapture.h"
 #include "DLCard.h"
 #include "DLFrame.h"
 
@@ -114,9 +116,14 @@ bool ofxBlackmagic::setDisplayMode(BMDDisplayMode displayMode)
 	return _mActiveCard->setDisplayMode(displayMode);
 }
 
-void ofxBlackmagic::initGrabber(BMDDisplayMode displayMode, bool bTexture)
+bool ofxBlackmagic::setPixelFormat(BMDPixelFormat pixelFormat)
 {
-	_mActiveCard->initGrabber(displayMode, bTexture);
+    return _mActiveCard->setPixelFormat(pixelFormat);
+}
+
+void ofxBlackmagic::initGrabber(bool bTexture)
+{
+	_mActiveCard->initGrabber();
 	setUseTexture(bTexture);
 }
 

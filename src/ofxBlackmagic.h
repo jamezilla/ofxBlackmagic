@@ -3,11 +3,10 @@
 #include <vector>
 #include "boost/shared_ptr.hpp"
 #include "DeckLinkAPI_h.h"
-#include "ofTexture.h"
-#include "DLCapture.h"
 
-
-// Valid parameters to setDisplayMode:
+////////////////////////////////////////////////////////////////////////////////
+// Valid parameters to setDisplayMode
+//   - match this to your camera's configured output mode
 //
 //                                     Frames      Fields  Suggested
 //                                     per         per     Time        Display
@@ -28,12 +27,17 @@
 // bmdModeHD1080i5994  1920    1080    30/1.001    2       30000       1001
 // bmdModeHD1080i6000  1920    1080    30          2       30000       1000
 // bmdModeHD1080p50    1920    1080    50          1       50000       1000
-
-
+// bmdModeHD1080p5994  1920    1080    60/1.001    1       60000       1001
+// bmdModeHD1080p6000  1920    1080    60          1       60000       1000
+// bmdMode2k2398       2048    1556    24/1.001    2       24000       1001
+// bmdMode2k24         2048    1556    24          2       24          1
+// bmdMode2k25         2048    1556    25          2       25000       1000
+/////////////////////////////////////////////////////////////////////////////////
 
 // forward declarations
 class DLCard;
 class DLFrame;
+class ofTexture;
 
 class ofxBlackmagic
 {
@@ -45,12 +49,13 @@ public:
     bool            isFrameNew();
     void            grabFrame();
     void            close();
-    void            initGrabber(BMDDisplayMode displayMode, bool bTexture = true);
+    void            initGrabber(bool bTexture = true);
     unsigned char*  getPixels();
     void            setSize(int height, int width);
     void            setVerbose(bool bTalkToMe = true);
     void            setDeviceID(int _deviceID);
     bool            setDisplayMode(BMDDisplayMode displayMode);
+    bool            setPixelFormat(BMDPixelFormat pixelFormat);
     void            setUseTexture(bool bUse);
     void            draw(float x, float y, float w, float h);
     void            draw(float x, float y);
@@ -61,13 +66,12 @@ public:
     float           getWidth();
     int             getFrameCount();
 	float           getFrameRate();
-	//int             getQueueDepth();
 
 private:
     bool                       _mVerbose;
     std::vector<DLCard>        _mCards;
     DLCard*                    _mActiveCard;
-	boost::shared_ptr<DLFrame>      _mRawFrame;
+	boost::shared_ptr<DLFrame> _mRawFrame;
     bool                       _mRawFrameInitialized;
     bool                       _mNewFrame;
     bool                       _mUseTexture;

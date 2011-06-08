@@ -4,6 +4,24 @@ capture with a Blackmagic Intensity Pro card. It has not been tested
 with any of the other Blackmagic Designs cards, but it should work
 fine.
 
+ofxBlackmagic is mostly API compatible with ofVideoGrabber, but it has
+slightly different initialization semantics. See the example code.
+
+This wrapper doesn't support much of the Decklink API. It only does
+video capture (no audio). There is built-in support for YUV422 to RGB
+24, and YUV422 to grayscale conversion.
+
+This build is currently Windows specific. Porting to other platforms
+shouldn't be too hard, but I don't have a pressing need for it. It
+would involve:
+
+    - switching from the Decklink COM API to the equivalent C API
+      (mostly a cut and paste job)
+
+    - replacing the atomic operations in DLFrameQueue.cpp with
+      equivalent ops on your target platform - if you have a compiler
+      that supports c++0x, then this should be easy to do portably.
+
 
 This extension has external binary dependencies on:
     OpenCv          (included in openframeworks)
@@ -12,11 +30,11 @@ This extension has external binary dependencies on:
 This extension has external header file dependencies on:
     Boost Shared Pointer   (recommend installing Boost Pro - http://www.boostpro.com/download/)
 
-When installing Boost Pro, make sure to include the multi-threaded DLL and multi-threaded debug DLL installs.
-
+When installing Boost Pro, make sure to include the multi-threaded DLL
+and multi-threaded debug DLL installs.
 
 ####################################
-    Visual Studio Configuration
+    Visual Studio 2008 Configuration
 ####################################
 
 ------------------------------------
@@ -35,7 +53,6 @@ Configuration Properties -> Linker -> General:
 Configuration Properties -> C/C++ -> Preprocessor -> Preprocessor Definitions:
   BOOST_ALL_DYN_LINK
   BOOST_ALL_NO_LIB
-
     
 
 ------------------------------------

@@ -5,6 +5,7 @@
 #include <exception>
 #include "boost/thread/thread.hpp"
 #include "boost/bind.hpp"
+#include "ofUtils.h"
 
 #define COLUMN_WIDTH 35
 
@@ -17,6 +18,7 @@ const char *			DLCard::gKnownPixelFormatNames[]	= {"8-bit YUV", "10-bit YUV", "8
 DLCard::DLCard(IDeckLink* deckLink)
 {
     m_pDeckLink = deckLink;
+
     // increase the ref count so we don't lose it
 	deckLink->AddRef();
 
@@ -27,13 +29,12 @@ DLCard::DLCard(IDeckLink* deckLink)
 	if (m_pDeckLink->QueryInterface(IID_IDeckLinkInput, (void**)&m_pInputCard) != S_OK)
 		throw;
 
-	//	m_pOutputCard = NULL;
-
-    // lowest common denominator? should be
-    // set to something real by the user
+    // set the display mode and pixel format to something. should be set to
+    // something real by the user
     m_tDisplayMode = bmdModeHD1080i5994;
     m_tPixelFormat = bmdFormat8BitYUV;
 
+    // set the capture callback handler
 	m_pDelegate = new DLCapture();
 }
 
@@ -68,7 +69,7 @@ void DLCard::print_attributes(void)
 	result = m_pDeckLink->QueryInterface(IID_IDeckLinkAttributes, (void**)&deckLinkAttributes);
 	if (result != S_OK)
 	{
-		cout << "Could not obtain the IDeckLinkAttributes interface - result = " << result << endl;
+		ofLog(OF_LOG_ERROR, "Could not obtain the IDeckLinkAttributes interface");
 		goto bail;
 	}
 
@@ -90,13 +91,13 @@ void DLCard::print_attributes(void)
 			}
 			else
 			{
-				cout << "Could not query the serial port name attribute- result = " << result << endl;
+				ofLog(OF_LOG_ERROR, "Could not query the serial port name attribute");
 			}	
 		}
 	}
 	else
 	{
-		cout << "Could not query the serial port presence attribute- result = " << result << endl;
+		ofLog(OF_LOG_NOTICE, "Could not query the serial port presence attribute");
 	}
 
 	result = deckLinkAttributes->GetInt(BMDDeckLinkNumberOfSubDevices, &count);
@@ -112,13 +113,13 @@ void DLCard::print_attributes(void)
 			}
 			else
 			{
-				cout << "Could not query the sub-device index attribute- result = " << result << endl;
+				ofLog(OF_LOG_WARNING, "Could not query the sub-device index attribute");
 			}
 		}
 	}
 	else
 	{
-		cout << "Could not query the number of sub-device attribute- result = " << result << endl;
+		ofLog(OF_LOG_WARNING, "Could not query the number of sub-device attribute");
 	}
 
 	result = deckLinkAttributes->GetInt(BMDDeckLinkMaximumAudioChannels, &count);
@@ -128,7 +129,7 @@ void DLCard::print_attributes(void)
 	}
 	else
 	{
-		cout << "Could not query the internal keying attribute- result = " << result << endl;
+		ofLog(OF_LOG_WARNING, "Could not query the internal keying attribute");
 	}
 
 	result = deckLinkAttributes->GetFlag(BMDDeckLinkSupportsInputFormatDetection, &supported);
@@ -138,7 +139,7 @@ void DLCard::print_attributes(void)
 	}
 	else
 	{
-		cout << "Could not query the input mode detection attribute- result = " << result << endl;
+		ofLog(OF_LOG_WARNING, "Could not query the input mode detection attribute");
 	}
 
 	result = deckLinkAttributes->GetFlag(BMDDeckLinkSupportsInternalKeying, &supported);
@@ -148,7 +149,7 @@ void DLCard::print_attributes(void)
 	}
 	else
 	{
-		cout << "Could not query the internal keying attribute- result = " << result << endl;
+		ofLog(OF_LOG_WARNING, "Could not query the internal keying attribute");
 	}
 
 	result = deckLinkAttributes->GetFlag(BMDDeckLinkSupportsExternalKeying, &supported);
@@ -158,7 +159,7 @@ void DLCard::print_attributes(void)
 	}
 	else
 	{
-		cout << "Could not query the external keying attribute- result = " << result << endl;
+		ofLog(OF_LOG_WARNING, "Could not query the external keying attribute");
 	}
 
 	result = deckLinkAttributes->GetFlag(BMDDeckLinkSupportsHDKeying, &supported);
@@ -168,7 +169,7 @@ void DLCard::print_attributes(void)
 	}
 	else
 	{
-		cout << "Could not query the HD-mode keying attribute- result = " << result << endl;
+		ofLog(OF_LOG_WARNING, "Could not query the HD-mode keying attribute");
 	}
 
 bail:
@@ -395,70 +396,127 @@ bail:
 // BMDVideoInputFlags:
 //  bmdVideoInputFlagDefault				No other flags applicable
 //  bmdVideoInputEnableFormatDetection		Enable video input mode detection. (See IDeckLinkInputCallback::VideoInputFormatChanged for details)
-bool DLCard::setDisplayMode(BMDDisplayMode displayMode)
+bool DLCard::isVideoModeSupported(BMDDisplayMode displayMode, BMDPixelFormat pixelFormat)
 {
 	// check to see if the requested display mode is supported
     BMDDisplayModeSupport	displayModeSupport;
 	IDeckLinkDisplayMode*   newDisplayMode = NULL;
     m_pInputCard->DoesSupportVideoMode(displayMode,
+                                       pixelFormat,
+                                       bmdVideoInputFlagDefault,
+                                       &displayModeSupport,
+                                       &newDisplayMode);
+
+    // Release the IDeckLinkDisplayMode object to prevent a leak
+    newDisplayMode->Release();
+    
+    if(displayModeSupport != bmdDisplayModeSupported)
+        return false;
+
+    return true;
+}
+
+
+bool DLCard::setDisplayMode(BMDDisplayMode displayMode)
+{
+    if (m_bRunning) {
+        ofLog(OF_LOG_ERROR, "setDisplayMode - can't change settings while running");
+        return false;
+    }
+
+    if(!isVideoModeSupported(displayMode, m_tPixelFormat)){
+        ofLog(OF_LOG_ERROR, "setDisplayMode - display mode not supported");
+        return false;
+    }
+
+	// ok, actually set the display mode
+	m_tDisplayMode = displayMode;
+
+	return true;
+}
+
+bool DLCard::setPixelFormat(BMDPixelFormat pixelFormat)
+{
+    if (m_bRunning) {
+        ofLog(OF_LOG_ERROR, "setPixelFormat - can't change settings while running");
+        return false;
+    }
+
+    if(!isVideoModeSupported(m_tDisplayMode, pixelFormat)){
+        ofLog(OF_LOG_ERROR, "setPixelFormat - pixel format not supported");
+        return false;
+    }
+
+	// ok, actually set the display mode
+	m_tPixelFormat = pixelFormat;
+
+	return true;
+}
+
+// TODO: this is not very DRY, it's sorta duplicating isVideoModeSupported.
+//       better way to compose these methods?
+bool DLCard::getDisplayModeParams(long &modeWidth, long &modeHeight)
+{
+
+	// check to see if the requested display mode is supported
+    BMDDisplayModeSupport	displayModeSupport;
+	IDeckLinkDisplayMode*   newDisplayMode = NULL;
+    m_pInputCard->DoesSupportVideoMode(m_tDisplayMode,
                                        m_tPixelFormat,
                                        bmdVideoInputFlagDefault,
                                        &displayModeSupport,
                                        &newDisplayMode);
 
-    if(displayModeSupport != bmdDisplayModeSupported)
-        return false;
-
-	// ok, actually set the display mode
-	m_tDisplayMode = displayMode;
-
     BSTR displayModeBSTR = NULL;
 	HRESULT result = newDisplayMode->GetName(&displayModeBSTR);
     if (result == S_OK)
     {
-        _bstr_t					modeName(displayModeBSTR, false);
-        int						modeWidth;
-        int						modeHeight;
-        BMDTimeValue			frameRateDuration;
-        BMDTimeScale			frameRateScale;
+        // _bstr_t					modeName(displayModeBSTR, false);
+        // BMDTimeValue			frameRateDuration;
+        // BMDTimeScale			frameRateScale;
 			
         // Obtain the display mode's properties
         modeWidth = newDisplayMode->GetWidth();
         modeHeight = newDisplayMode->GetHeight();
-        newDisplayMode->GetFrameRate(&frameRateDuration, &frameRateScale);
+        // newDisplayMode->GetFrameRate(&frameRateDuration, &frameRateScale);
 
-        // set the callback's display size here so it is something valid
-        m_pDelegate->setPreviewSize(modeWidth, modeHeight);
-
-        cout << endl;
-        cout << "INPUT DISPLAY MODE SETTINGS" << endl;
-        cout << "---------------------------" << endl;
-        cout << setw(11) << left << "Name:" << (char*)modeName << endl;
-        cout << setw(11) << left << "Width:" << modeWidth << endl;
-        cout << setw(11) << left << "Height:" << modeHeight << endl;
-        cout << setw(11) << left << "Framerate:" << ((double)frameRateScale/(double)frameRateDuration) << endl;
-        cout << endl;
+        // cout << endl;
+        // cout << "INPUT DISPLAY MODE SETTINGS" << endl;
+        // cout << "---------------------------" << endl;
+        // cout << setw(11) << left << "Name:" << (char*)modeName << endl;
+        // cout << setw(11) << left << "Width:" << modeWidth << endl;
+        // cout << setw(11) << left << "Height:" << modeHeight << endl;
+        // cout << setw(11) << left << "Framerate:" << ((double)frameRateScale/(double)frameRateDuration) << endl;
+        // cout << endl;
     }
 		
     // Release the IDeckLinkDisplayMode object to prevent a leak
     newDisplayMode->Release();
 
-	return true;
+    return (result == S_OK) ? true : false;
 }
 
-void DLCard::initGrabber(BMDDisplayMode displayMode, bool bTexture)
+// TODO: change this return value?
+bool DLCard::initGrabber(void)
 {
     if (m_bRunning) {
-        cout << "initGrabber - can't change settings while running" << endl;
-        return;
+        ofLog(OF_LOG_ERROR, "initGrabber - can't change settings while running");
+        return false;
     }
 
-    if(!setDisplayMode(displayMode)) {
-        cout << "Couldn't set display mode... bailing" << endl;
-        return;
-    }
+    long modeWidth, modeHeight;
+    
+    if(!getDisplayModeParams(modeWidth, modeHeight)){
+        ofLog(OF_LOG_ERROR, "initGrabber - video input mode not supported (bad pixel format or display mode");
+        return false;
+    }    
+
+    // set the callback's display size
+    m_pDelegate->setPreviewSize(modeWidth, modeHeight);
 
     boost::thread pp(boost::bind(&DLCard::runThreadedCapture, this));
+
+    return true;
 }
 
 void DLCard::runThreadedCapture(void)
