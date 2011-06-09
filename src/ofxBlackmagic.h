@@ -45,27 +45,27 @@ public:
     ofxBlackmagic();
     ~ofxBlackmagic();
 
-    void            listDevices();
-    bool            isFrameNew();
-    void            grabFrame();
-    void            close();
-    void            initGrabber(bool bTexture = true);
-    unsigned char*  getPixels();
-    void            setSize(int height, int width);
-    void            setVerbose(bool bTalkToMe = true);
-    void            setDeviceID(int _deviceID);
-    bool            setDisplayMode(BMDDisplayMode displayMode);
-    bool            setPixelFormat(BMDPixelFormat pixelFormat);
-    void            setUseTexture(bool bUse);
-    void            draw(float x, float y, float w, float h);
-    void            draw(float x, float y);
-    void            setAnchorPercent(float xPct, float yPct);
-    void            setAnchorPoint(int x, int y);
-    void            resetAnchor();
-    float           getHeight();
-    float           getWidth();
-    int             getFrameCount();
-	float           getFrameRate();
+    void            close();                                     // stop capture
+    void            draw(float x, float y, float w, float h);    // draw the pic to screen
+    void            draw(float x, float y);                    
+    int             getFrameCount();                             // get the # of captured frames
+	float           getFrameRate();                              // calculate the capture frame rate
+    float           getHeight();                                 // get the height of the processed image
+    float           getWidth();                                  // get the width of the processed image
+    unsigned char*  getPixels();                                 // get a pointer to the image data
+    void            grabFrame();                                 // pull the next captured frame
+    void            initGrabber(bool bTexture = true);           // start image capture
+    bool            isFrameNew();                                // is this a new image, or just the last one captured?
+    void            listDevices();                               // dump some device data
+    void            resetAnchor();                               // reset the point coordinates where images are drawn
+    void            setAnchorPercent(float xPct, float yPct);    // set the coordinates where images are drawn (as a percentage)
+    void            setAnchorPoint(int x, int y);                // set the coordinates where images are drawn (as a fixed point)
+    void            setDeviceID(int _deviceID);                  // pick which decklink device to capture from
+    bool            setDisplayMode(BMDDisplayMode displayMode);  // pick the hardware display mode (see table above)
+    bool            setPixelFormat(BMDPixelFormat pixelFormat);  // pick the hardware pixel format (not all cards can change this)
+    void            setSize(int height, int width);              // software image resize
+    void            setVerbose(bool bTalkToMe = true);           // print a bunch of junk out
+    void            setUseTexture(bool bUse);                    // load the captured frame to a texture
 
 private:
     bool                       _mVerbose;

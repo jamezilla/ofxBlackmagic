@@ -1,20 +1,19 @@
 #include "DLCapture.h"
 #include <iostream>
 #include "cv.h"
+#include "boost/thread.hpp"
 
 using namespace boost;
 
-DLCapture::DLCapture()
+DLCapture::DLCapture() : mRefCount(1),
+                         mFrameCount(0),
+                         mDimensionsInitialized(false),
+                         mPreviewWidth(-1),
+                         mPreviewHeight(-1),
+                         mFramerateTimestamps(60)
 {
     mNumCores = thread::hardware_concurrency();
-    mRefCount = 1;
-    mFrameCount = 0;
-    mDimensionsInitialized = false;
-    mDropNumFrames = 0;
-    mPreviewWidth = -1;
-    mPreviewHeight = -1;
     conversion_workers.size_controller().resize(mNumCores);
-	/*CreateLookupTables();*/
 }
 
 DLCapture::~DLCapture()
@@ -279,9 +278,20 @@ DLCapture::getPreviewFrame(boost::shared_ptr<DLFrame> &frame)
 //}
 
 
+float
+DLCapture::getFrameRate(void)
+{
+    mutex::scoped_lock l(mFramerateMutex);
+    return  mFramerateTimestamps.size() / (mFramerateTimestamps.back() - mFramerateTimestamps.front());
+}
+
 HRESULT STDMETHODCALLTYPE
 DLCapture::VideoInputFrameArrived(IDeckLinkVideoInputFrame* pArrivedFrame, IDeckLinkAudioInputPacket*)
 {
+    {
+        mutex::scoped_lock l(mFramerateMutex);
+        mFramerateTimestamps.push_back(ofGetElapsedTimef());
+    }
     mFrameCount++;
 
     // precompute some junk

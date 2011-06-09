@@ -453,6 +453,12 @@ bool DLCard::setPixelFormat(BMDPixelFormat pixelFormat)
 	return true;
 }
 
+bool DLCard::setColorspace(BMDImageType imageType)
+{
+    ofLog(OF_LOG_NOTICE, "setColorspace - not implemented yet");
+	return true;
+}
+
 // TODO: this is not very DRY, it's sorta duplicating isVideoModeSupported.
 //       better way to compose these methods?
 bool DLCard::getDisplayModeParams(long &modeWidth, long &modeHeight)

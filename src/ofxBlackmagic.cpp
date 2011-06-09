@@ -185,7 +185,7 @@ int ofxBlackmagic::getFrameCount()
 
 float ofxBlackmagic::getFrameRate() 
 {
-    return getFrameCount()/ofGetElapsedTimef();
+    return _mActiveCard->m_pDelegate->getFrameRate();
 }
 
 //int ofxBlackmagic::getQueueDepth()

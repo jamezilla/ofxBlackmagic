@@ -39,25 +39,31 @@
 class DLCard
 {
 public:
+
+  // duplicating these types here for type safety reasons
+  typedef enum _bmdImageType {
+    BMD_IMAGE_GRAYSCALE,
+    BMD_IMAGE_COLOR
+  } BMDImageType;
+
   DLCard() {};
   DLCard(IDeckLink* deckLink);
   ~DLCard();
 
-  bool initGrabber(void);
-  bool setDisplayMode(BMDDisplayMode displayMode);
-  bool setPixelFormat(BMDPixelFormat pixelFormat);
-  bool getDisplayModeParams(long &modeWidth, long &modeHeight);
-  bool isVideoModeSupported(BMDDisplayMode displayMode, BMDPixelFormat pixelFormat);
-  void close(void);
-
+  bool initGrabber(void);                                                            // start up decklink capture
+  bool setDisplayMode(BMDDisplayMode displayMode);                                   // set the hardware display mode
+  bool setPixelFormat(BMDPixelFormat pixelFormat);                                   // set the hardware pixel format
+  bool setColorspace(BMDImageType imageType);                                        // set the image color space conversion
+  bool getDisplayModeParams(long &modeWidth, long &modeHeight);                      // get the hardware width/height
+  bool isVideoModeSupported(BMDDisplayMode displayMode, BMDPixelFormat pixelFormat); // query the hardware for mode and format support
+  void close(void);                                                                  // shut down decklink capture
   void print_name(void);
   void print_attributes(void);
   void print_output_modes(void);
   void print_capabilities(void);
-  bool running(void);
+  bool running(void);                                                                // whether capture is running or not
 
-  //    std::vector
-  DLCapture*     m_pDelegate;
+  DLCapture*     m_pDelegate;                                                        // the capture callback delegate
 
 private:
   void runThreadedCapture(void);
