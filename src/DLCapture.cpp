@@ -1,3 +1,24 @@
+// Copyright (c) 2011, James Hughes
+// All rights reserved.
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 #include "DLCapture.h"
 #include <iostream>
 #include "cv.h"
@@ -12,6 +33,7 @@ DLCapture::DLCapture() : mRefCount(1),
                          mPreviewHeight(-1),
                          mFramerateTimestamps(60)
 {
+    CreateLookupTables();
     mNumCores = thread::hardware_concurrency();
     conversion_workers.size_controller().resize(mNumCores);
 }
@@ -178,6 +200,28 @@ DLCapture::YuvToRgbChunk(BYTE *yuv, boost::shared_ptr<DLFrame> rgb, unsigned int
     // convert 4 YUV macropixels to 6 RGB pixels
 	unsigned int i, j;
     unsigned int boundry = offset + chunk_size;
+    unsigned char y, u, v;
+    
+    for(i=offset, j=(offset/4)*6; i<boundry; i+=4, j+=6){
+        y = yuv[i+1];
+        u = yuv[i];
+        v = yuv[i+2];
+
+        rgb->pixels[j]   = red[y][v];
+        rgb->pixels[j+1] = green[y][u][v];
+        rgb->pixels[j+2] = blue[y][u];
+
+        y = yuv[i+3];
+
+        rgb->pixels[j+3] = red[y][v];       
+        rgb->pixels[j+4] = green[y][u][v];
+        rgb->pixels[j+5] = blue[y][u];
+    }
+
+    /*
+    // fixed point math implementation - superceded by the lookup table method
+	unsigned int i, j;
+    unsigned int boundry = offset + chunk_size;
 	int yy, uu, vv, ug_plus_vg, ub, vr;
 	int r,g,b;
     for(i=offset, j=(offset/4)*6; i<boundry; i+=4, j+=6){
@@ -201,9 +245,10 @@ DLCapture::YuvToRgbChunk(BYTE *yuv, boost::shared_ptr<DLFrame> rgb, unsigned int
 		rgb->pixels[j+4] = g < 0 ? 0 : (g > 255 ? 255 : (unsigned char)g);
 		rgb->pixels[j+5] = b < 0 ? 0 : (b > 255 ? 255 : (unsigned char)b);
     }
+    */
 }
 
-
+// clamp values between 0 and 255
 inline unsigned int
 DLCapture::Clamp(double value)
 {
@@ -211,17 +256,51 @@ DLCapture::Clamp(double value)
     if(value < 0.0)   return 0;
     return (unsigned int) value;
 }
-//
-//void
-//DLCapture::CreateLookupTables(void){
-//	for(int i=0; i<256; i++) {
-//		mYLookup[i] = 1.164 * (i - 16);
-//		mU1Lookup[i] = 0.534 * (i - 128);
-//		mU2Lookup[i] = 1.793 * (i - 128);
-//		mV1Lookup[i] = 2.115 * (i - 128);
-//		mV2Lookup[i] = 0.213 * (i - 128);
-//	}
-//}
+
+// tables are done for all possible values 0 - 255 of yuv
+// rather than just "legal" values of yuv.
+// two dimensional arrays for red &  blue, three dimensions for green
+void
+DLCapture::CreateLookupTables(void){
+
+    int yy, uu, vv, ug_plus_vg, ub, vr, val;
+
+    // Red
+    for (int y = 0; y < 256; y++) {
+        for (int v = 0; v < 256; v++) {
+            yy         = y << 8;
+            vv         = v - 128;
+            vr         = vv * 359;
+            val        = (yy + vr) >>  8;
+            red[y][v]  = (val < 0) ? 0 : ((val > 255) ? 255 : (unsigned char)val);
+        }
+    }
+
+    // Blue
+    for (int y = 0; y < 256; y++) {
+        for (int u = 0; u < 256; u++) {
+            yy          = y << 8;
+            uu          = u - 128;
+            ub          = uu * 454;
+            val         = (yy + ub) >> 8;
+            blue[y][u]  = (val < 0) ? 0 : ((val > 255) ? 255 : (unsigned char)val);
+        }
+    }
+
+    // Green
+    for (int y = 0; y < 256; y++) {
+        for (int u = 0; u < 256; u++) {
+            for (int v = 0; v < 256; v++) {
+                yy              = y << 8;
+                uu              = u - 128;
+                vv              = v - 128;
+                ug_plus_vg      = uu * 88 + vv * 183;
+                val             = (yy - ug_plus_vg) >> 8;
+                green[y][u][v]  = (val <  0) ? 0 : ((val >  255) ? 255 : (unsigned char)val);
+            }
+        }
+    }
+}
 
 shared_ptr<DLFrame>
 DLCapture::Resize(shared_ptr<DLFrame> src, int targetWidth, int targetHeight)
@@ -282,7 +361,10 @@ float
 DLCapture::getFrameRate(void)
 {
     mutex::scoped_lock l(mFramerateMutex);
-    return  mFramerateTimestamps.size() / (mFramerateTimestamps.back() - mFramerateTimestamps.front());
+	if(mFramerateTimestamps.size() < 2)
+		return 0.0f;
+	else
+		return  mFramerateTimestamps.size() / (mFramerateTimestamps.back() - mFramerateTimestamps.front());
 }
 
 HRESULT STDMETHODCALLTYPE
