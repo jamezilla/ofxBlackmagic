@@ -162,11 +162,11 @@ void ofxBlackmagic::grabFrame()
     // we don't have ANYTHING to send to the client
     if(_mRawFrameInitialized == false){
         // idle until we have SOMETHING
-        while(_mActiveCard->m_pDelegate->getPreviewFrame(_mRawFrame))
+        while(_mActiveCard->m_pDelegate->getFrame(_mRawFrame))
             Sleep(10);
         // from now on we can send stale stuff
         _mRawFrameInitialized = true;
-	} else if(_mActiveCard->m_pDelegate->getPreviewFrame(_mRawFrame)){
+	} else if(_mActiveCard->m_pDelegate->getFrame(_mRawFrame)){
 		// TODO: test with with texture data loading in the background
 		_mTex.loadData(_mRawFrame->getPixels(), _mRawFrame->getWidth(), _mRawFrame->getHeight(), _mRawFrame->getOpenGLType());
 		_mNewFrame = true;
@@ -178,18 +178,18 @@ void ofxBlackmagic::grabFrame()
 float ofxBlackmagic::getWidth()
 {
 	// TODO: make the delegate properties private
-	return (float)_mActiveCard->m_pDelegate->mPreviewWidth;
+	return (float)_mActiveCard->m_pDelegate->getWidth();
 }
 
 float ofxBlackmagic::getHeight()
 {
 	// TODO: make the delegate properties private
-	return (float)_mActiveCard->m_pDelegate->mPreviewHeight;
+	return (float)_mActiveCard->m_pDelegate->getHeight();
 }
 
 void ofxBlackmagic::setSize(int new_width, int new_height)
 {
-    _mActiveCard->m_pDelegate->setPreviewSize(new_width, new_height);
+    _mActiveCard->m_pDelegate->setSize(new_width, new_height);
 }
 
 unsigned char* ofxBlackmagic::getPixels()
@@ -201,7 +201,7 @@ unsigned char* ofxBlackmagic::getPixels()
 
 int ofxBlackmagic::getFrameCount() 
 {
-    return _mActiveCard->m_pDelegate->mFrameCount;
+    return _mActiveCard->m_pDelegate->getFrameCount();
 }
 
 float ofxBlackmagic::getFrameRate() 
@@ -217,8 +217,11 @@ float ofxBlackmagic::getFrameRate()
 void ofxBlackmagic::setUseTexture(bool bUse)
 {
 	_mUseTexture = bUse;
-	if(bUse == true)
-		_mTex.allocate(_mActiveCard->m_pDelegate->mPreviewWidth, _mActiveCard->m_pDelegate->mPreviewHeight,GL_RGB);
+	if(bUse == true) {
+		int width = (int)_mActiveCard->m_pDelegate->getWidth();
+		int height = (int)_mActiveCard->m_pDelegate->getHeight();
+		_mTex.allocate(width, height,GL_RGB);
+	}
 }
 
 void ofxBlackmagic::setAnchorPercent(float xPct, float yPct)
@@ -246,7 +249,9 @@ void ofxBlackmagic::draw(float _x, float _y, float _w, float _h)
 
 void ofxBlackmagic::draw(float _x, float _y)
 {
-	draw(_x, _y, (float)_mActiveCard->m_pDelegate->mPreviewWidth, (float)_mActiveCard->m_pDelegate->mPreviewHeight);
+	float width = (float)_mActiveCard->m_pDelegate->getWidth();
+	float height = (float)_mActiveCard->m_pDelegate->getHeight();
+	draw(_x, _y, width, height);
 }
 //
 //void ofxBlackmagic::startRecording(void)

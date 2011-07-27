@@ -29,13 +29,20 @@ using namespace boost;
 DLCapture::DLCapture() : mRefCount(1),
                          mFrameCount(0),
                          mDimensionsInitialized(false),
-                         mPreviewWidth(-1),
-                         mPreviewHeight(-1),
+                         mWidth(-1),
+                         mHeight(-1),
                          mFramerateTimestamps(60)
 {
-    CreateLookupTables();
-    mNumCores = thread::hardware_concurrency();
-    conversion_workers.size_controller().resize(mNumCores);
+    // generate the YUV lookup tables and store them in memory
+	CreateLookupTables();
+
+	// figure out how much concurrency we have on this box
+	// note: it's possible for hardware_concurrency to return 0.
+    // subtract 1 for the frame capture thread, and 1 for our host app
+    int pool_size = max(thread::hardware_concurrency() - 2, 2);
+	
+	// size our threadpool appropriately
+    setThreadpoolSize(pool_size);
 }
 
 DLCapture::~DLCapture()
@@ -102,20 +109,94 @@ DLCapture::VideoInputFormatChanged(BMDVideoInputFormatChangedEvents notification
     return S_OK;
 }
 
+unsigned int
+DLCapture::getWidth(void)
+{
+    return mWidth;
+}
+
+unsigned int
+DLCapture::getHeight(void)
+{
+    return mHeight;
+}
+
+void
+DLCapture::setSize(int width, int height)
+{
+    mWidth  = width;
+    mHeight = height;
+}
+
+unsigned int
+DLCapture::getCaptureWidth(void)
+{
+    return (unsigned int) mCaptureWidth;
+}
+
+unsigned int
+DLCapture::getCaptureHeight(void)
+{
+    return (unsigned int) mCaptureHeight;
+}
+
 void
 DLCapture::InitialiseDimensions(IDeckLinkVideoInputFrame* pArrivedFrame)
 {
-    mRawWidth             = pArrivedFrame->GetWidth();
-    mRawHeight            = pArrivedFrame->GetHeight();
-    mRawRowBytes          = pArrivedFrame->GetRowBytes();
-    //mPixelFormat          = pArrivedFrame->GetPixelFormat();
-	// TODO: change these so they're settable?
-	mCaptureWidth         = mRawWidth;
-	mCaptureHeight        = mRawHeight;
+    mCaptureWidth      = pArrivedFrame->GetWidth();
+    mCaptureHeight     = pArrivedFrame->GetHeight();
+    mCaptureRowBytes   = pArrivedFrame->GetRowBytes();
+    mCaptureTotalBytes = mCaptureRowBytes * mCaptureHeight;
 
-    mRawTotalBytes        = mRawRowBytes  * mRawHeight;
-    mGrayscaleTotalBytes  = mRawWidth     * mRawHeight;
-    mRgbTotalBytes        = mRawWidth * 3 * mRawHeight;
+	// bend over backwards to send memory aligned work units to each thread
+	// NOTE: I'm sure there's a more elegant way to split up this 
+	//       work to make it memory aligned, but I'm not smart enough
+	//       to figure it out today...
+    mConversionChunkSize = mCaptureRowBytes * (long)ceil(mCaptureHeight / (float)getThreadpoolSize());
+	// calculate whether the last chunk will be memory aligned or not and set its size
+	if(mCaptureHeight % getThreadpoolSize() == 0)
+		mConversionChunkSizeLeftover = mConversionChunkSize;
+	else
+		mConversionChunkSizeLeftover = mCaptureTotalBytes % mConversionChunkSize;
+
+	// precalculate some stuff
+	mGrayscaleTotalBytes = mCaptureWidth * mCaptureHeight;
+    mRgbRowBytes         = mCaptureWidth * 3;
+}
+
+bool
+DLCapture::getFrame(shared_ptr<DLFrame> &frame)
+{
+	return fifo.Consume(frame);
+}
+
+long
+DLCapture::getFrameCount(void)
+{
+    return mFrameCount;
+}
+
+float
+DLCapture::getFrameRate(void)
+{
+    mutex::scoped_lock l(mFramerateMutex);
+	if(mFramerateTimestamps.size() < 2)
+		return 0.0f;
+	else
+		return  mFramerateTimestamps.size() / (mFramerateTimestamps.back() - mFramerateTimestamps.front());
+}
+
+unsigned int
+DLCapture::getThreadpoolSize(void)
+{
+    return (unsigned int) conversion_workers.size();
+}
+
+void
+DLCapture::setThreadpoolSize(unsigned int size)
+{
+    if(size < 1) size = 1;
+    conversion_workers.size_controller().resize(size);
 }
     
 // TODO: take care of the fact that frames might get out of order? There's
@@ -127,16 +208,16 @@ void
 DLCapture::PostProcess(IDeckLinkVideoInputFrame* pArrivedFrame)
 {
     // post-process the preview frame
-    // if(mRawHeight == mPreviewHeight || mRawWidth == mPreviewWidth){
+    // if(mCaptureHeight == mHeight || mCaptureWidth == mWidth){
     //     fifo.Produce(YuvToGrayscale(pArrivedFrame));
     // } else {
-    //     fifo.Produce(Resize(YuvToGrayscale(pArrivedFrame), mPreviewWidth, mPreviewHeight));
+    //     fifo.Produce(Resize(YuvToGrayscale(pArrivedFrame), mWidth, mHeight));
     // }
 
-    if(mRawHeight == mPreviewHeight || mRawWidth == mPreviewWidth){
+    if(mCaptureHeight == mHeight || mCaptureWidth == mWidth){
         fifo.Produce(YuvToRgb(pArrivedFrame));
     } else {
-       fifo.Produce(Resize(YuvToRgb(pArrivedFrame), mPreviewWidth, mPreviewHeight));
+       fifo.Produce(Resize(YuvToRgb(pArrivedFrame), mWidth, mHeight));
     }
 
     // free up the frame reference
@@ -150,7 +231,7 @@ DLCapture::YuvToGrayscale(IDeckLinkVideoInputFrame* pArrivedFrame)
     BYTE* yuv;
     pArrivedFrame->GetBytes((void**)&yuv);
 
-    shared_ptr<DLFrame> grayscale(new DLFrame(mRawWidth, mRawHeight, mRawWidth, DLFrame::DL_GRAYSCALE));
+    shared_ptr<DLFrame> grayscale(new DLFrame(mCaptureWidth, mCaptureHeight, mCaptureWidth, DLFrame::DL_GRAYSCALE));
     
     // simple YUV -> Grayscale, just throw away the U and V channels
     for(int i=0; i<mGrayscaleTotalBytes; i++)
@@ -167,7 +248,7 @@ DLCapture::YuvToGrayscale(IDeckLinkVideoInputFrame* pArrivedFrame)
 // http://www.fourcc.org/source/YUV420P-OpenGL-GLSLang.c
 //
 //
-// Check out bit layout for "bmdFormat8BitYUV : ‘UYVY’ 4:2:2 Representation"
+// Check out bit layout for "bmdFormat8BitYUV : UYVY 4:2:2 Representation"
 // on page 204 of the Decklink SDK documentation
 //
 // Below formulas from Color Space Conversions on pg 227 of the Decklink SDK documentation
@@ -182,12 +263,28 @@ DLCapture::YuvToRgb(IDeckLinkVideoInputFrame* pArrivedFrame)
     pArrivedFrame->GetBytes((void**)&yuv);
 
     // allocate space for the rgb image
-    boost::shared_ptr<DLFrame> rgb(new DLFrame(mRawWidth, mRawHeight, mRawWidth*3, DLFrame::DL_RGB));
+    shared_ptr<DLFrame> rgb(new DLFrame(mCaptureWidth, mCaptureHeight, mRgbRowBytes, DLFrame::DL_RGB));
 
-    unsigned int chunk_size = mRawTotalBytes/mNumCores;
+    int num_workers = conversion_workers.size() - 1;
 
-    for(int i=0; i<mNumCores; i++)
-        conversion_workers.schedule(bind(&DLCapture::YuvToRgbChunk, this, yuv, rgb, chunk_size*i, chunk_size));
+    // split up the image into memory-aligned chunks so they take advantage of
+    // the CPU cache
+	for(int i=0; i<num_workers; i++) {
+        conversion_workers.schedule(bind(&DLCapture::YuvToRgbChunk,
+                                         this,
+                                         yuv,
+                                         rgb,
+                                         mConversionChunkSize*i,
+                                         mConversionChunkSize));
+	}
+
+    // get the off-sized leftover chunk and schedule it
+    conversion_workers.schedule(bind(&DLCapture::YuvToRgbChunk,
+                                     this,
+                                     yuv,
+                                     rgb,
+                                     mConversionChunkSize*num_workers,
+                                     mConversionChunkSizeLeftover));
 
     conversion_workers.wait();
 
@@ -195,7 +292,7 @@ DLCapture::YuvToRgb(IDeckLinkVideoInputFrame* pArrivedFrame)
 }
 
 void 
-DLCapture::YuvToRgbChunk(BYTE *yuv, boost::shared_ptr<DLFrame> rgb, unsigned int offset, unsigned int chunk_size)
+DLCapture::YuvToRgbChunk(BYTE *yuv, shared_ptr<DLFrame> rgb, unsigned int offset, unsigned int chunk_size)
 {
     // convert 4 YUV macropixels to 6 RGB pixels
 	unsigned int i, j;
@@ -249,12 +346,12 @@ DLCapture::YuvToRgbChunk(BYTE *yuv, boost::shared_ptr<DLFrame> rgb, unsigned int
 }
 
 // clamp values between 0 and 255
-inline unsigned int
-DLCapture::Clamp(double value)
+inline BYTE
+DLCapture::Clamp(int value)
 {
-    if(value > 255.0) return 255;
-    if(value < 0.0)   return 0;
-    return (unsigned int) value;
+    if(value > 255) return 255;
+    if(value < 0)   return 0;
+    return value;
 }
 
 // tables are done for all possible values 0 - 255 of yuv
@@ -272,7 +369,7 @@ DLCapture::CreateLookupTables(void){
             vv         = v - 128;
             vr         = vv * 359;
             val        = (yy + vr) >>  8;
-            red[y][v]  = (val < 0) ? 0 : ((val > 255) ? 255 : (unsigned char)val);
+            red[y][v]  = Clamp(val);
         }
     }
 
@@ -283,7 +380,7 @@ DLCapture::CreateLookupTables(void){
             uu          = u - 128;
             ub          = uu * 454;
             val         = (yy + ub) >> 8;
-            blue[y][u]  = (val < 0) ? 0 : ((val > 255) ? 255 : (unsigned char)val);
+            blue[y][u]  = Clamp(val);
         }
     }
 
@@ -296,7 +393,7 @@ DLCapture::CreateLookupTables(void){
                 vv              = v - 128;
                 ug_plus_vg      = uu * 88 + vv * 183;
                 val             = (yy - ug_plus_vg) >> 8;
-                green[y][u][v]  = (val <  0) ? 0 : ((val >  255) ? 255 : (unsigned char)val);
+                green[y][u][v]  = Clamp(val);
             }
         }
     }
@@ -329,44 +426,6 @@ DLCapture::Resize(shared_ptr<DLFrame> src, int targetWidth, int targetHeight)
  
 }
 
-void
-DLCapture::setPreviewSize(int width, int height)
-{
-    mPreviewWidth  = width;
-    mPreviewHeight = height;
-}
-
-bool
-DLCapture::getPreviewFrame(boost::shared_ptr<DLFrame> &frame)
-{
-	return fifo.Consume(frame);
-}
-
-//bool
-//DLCapture::isPreviewQueueEmpty(void)
-//{
-//	//boost::mutex::scoped_lock l(mPreviewFramesMutex);
-//	return mPreviewFrames.empty();
-//}
-
-//int 
-//DLCapture::getPreviewQueueSize(void)
-//{
-//	//boost::mutex::scoped_lock l(mPreviewFramesMutex);
-//	return mPreviewFrames.size();
-//}
-
-
-float
-DLCapture::getFrameRate(void)
-{
-    mutex::scoped_lock l(mFramerateMutex);
-	if(mFramerateTimestamps.size() < 2)
-		return 0.0f;
-	else
-		return  mFramerateTimestamps.size() / (mFramerateTimestamps.back() - mFramerateTimestamps.front());
-}
-
 HRESULT STDMETHODCALLTYPE
 DLCapture::VideoInputFrameArrived(IDeckLinkVideoInputFrame* pArrivedFrame, IDeckLinkAudioInputPacket*)
 {
@@ -382,7 +441,7 @@ DLCapture::VideoInputFrameArrived(IDeckLinkVideoInputFrame* pArrivedFrame, IDeck
     }
     
     // don't post process this frame if we're overwhelming the preview buffer
-//    if(10 > mPreviewFrames.size()){
+//    if(10 > mFrames.size()){
         // increase the refcount since we don't know when the thread will execute
         pArrivedFrame->AddRef();
         // push it to the thread pool for background processing

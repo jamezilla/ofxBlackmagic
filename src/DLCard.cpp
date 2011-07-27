@@ -539,7 +539,7 @@ bool DLCard::initGrabber(void)
     }    
 
     // set the callback's display size
-    m_pDelegate->setPreviewSize(modeWidth, modeHeight);
+    m_pDelegate->setSize(modeWidth, modeHeight);
 
     boost::thread pp(boost::bind(&DLCard::runThreadedCapture, this));
 

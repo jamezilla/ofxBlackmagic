@@ -34,60 +34,66 @@ class DLCapture : public IDeckLinkInputCallback
 
 public:
 
-	DLCapture ();
-	~DLCapture ();
+    DLCapture ();
+    ~DLCapture ();
 
     float                               getFrameRate(void);
-	bool								getPreviewFrame(boost::shared_ptr<DLFrame> &frame);
-    void                                setPreviewSize(int width, int height);
-
+    long                                getFrameCount(void);
+    bool                                getFrame(boost::shared_ptr<DLFrame> &frame);
+    void                                setSize(int width, int height);
+    unsigned int                        getWidth(void);
+    unsigned int                        getHeight(void);
+    unsigned int                        getCaptureWidth(void);
+    unsigned int                        getCaptureHeight(void);
+    unsigned int                        getThreadpoolSize(void);
+    void                                setThreadpoolSize(unsigned int size);
+    
     // callback interfaces
-	virtual ULONG STDMETHODCALLTYPE		AddRef(void);
-	virtual HRESULT STDMETHODCALLTYPE	QueryInterface(REFIID iid, LPVOID *ppv);
-	virtual ULONG STDMETHODCALLTYPE		Release(void);
-	virtual HRESULT STDMETHODCALLTYPE	VideoInputFormatChanged(BMDVideoInputFormatChangedEvents notificationEvents,
+    virtual ULONG STDMETHODCALLTYPE     AddRef(void);
+    virtual HRESULT STDMETHODCALLTYPE   QueryInterface(REFIID iid, LPVOID *ppv);
+    virtual ULONG STDMETHODCALLTYPE     Release(void);
+    virtual HRESULT STDMETHODCALLTYPE   VideoInputFormatChanged(BMDVideoInputFormatChangedEvents notificationEvents,
                                                                 IDeckLinkDisplayMode* newDisplayMode,
                                                                 BMDDetectedVideoInputFormatFlags detectedSignalFlags);
-	virtual HRESULT STDMETHODCALLTYPE	VideoInputFrameArrived(IDeckLinkVideoInputFrame* pArrivedFrame,
+    virtual HRESULT STDMETHODCALLTYPE   VideoInputFrameArrived(IDeckLinkVideoInputFrame* pArrivedFrame,
                                                                IDeckLinkAudioInputPacket*);
-
-    long                                mFrameCount;
-	long            					mRawWidth;
-    long            					mRawHeight;
-	long            					mCaptureWidth;
-    long            					mCaptureHeight;
-	long                                mPreviewWidth;
-    long                                mPreviewHeight;
     
 
 private:
-    unsigned int                        Clamp(double value);
-    void                        		InitialiseDimensions(IDeckLinkVideoInputFrame* pArrivedFrame);
-    void                        		PostProcess(IDeckLinkVideoInputFrame* pArrivedFrame);
-    boost::shared_ptr<DLFrame>  		Resize(boost::shared_ptr<DLFrame> src, int targetWidth, int targetHeight);
-    boost::shared_ptr<DLFrame>  		YuvToGrayscale(IDeckLinkVideoInputFrame* pArrivedFrame);
+    BYTE                                Clamp(int value);
+    void                                InitialiseDimensions(IDeckLinkVideoInputFrame* pArrivedFrame);
+    void                                PostProcess(IDeckLinkVideoInputFrame* pArrivedFrame);
+    boost::shared_ptr<DLFrame>          Resize(boost::shared_ptr<DLFrame> src, int targetWidth, int targetHeight);
+    boost::shared_ptr<DLFrame>          YuvToGrayscale(IDeckLinkVideoInputFrame* pArrivedFrame);
     boost::shared_ptr<DLFrame>          YuvToRgb(IDeckLinkVideoInputFrame* pArrivedFrame);
     void                                YuvToRgbChunk(BYTE *yuv, boost::shared_ptr<DLFrame> rgb, unsigned int offset, unsigned int chunk_size);
     void                                CreateLookupTables(void);
     
-    DLFrameQueue                        fifo;
-    boost::mutex                        mFramerateMutex;
-    boost::circular_buffer<float>       mFramerateTimestamps;
+    DLFrameQueue                        fifo;                   // producer/consumer queue to hold captured frames
+    boost::circular_buffer<float>       mFramerateTimestamps;   // buffer to calculate current framerate
+    boost::mutex                        mFramerateMutex;        // mutex to protect mFramerateTimestamps buffer access
 
-    int                                 mRefCount;
-    long            					mRawRowBytes;
-    long            					mRawTotalBytes;
-    long            					mGrayscaleTotalBytes;
-    long            					mRgbTotalBytes;
+    unsigned int                        mRefCount;
+
+    long                                mFrameCount;            // number of frames we've captured
+    long                                mCaptureWidth;          // width of the raw captured frame
+    long                                mCaptureHeight;         // height of the raw captured frame
+	long                                mCaptureRowBytes;
+    long                                mCaptureTotalBytes;     // 
+    long                                mGrayscaleTotalBytes;
+    long                                mRgbRowBytes;
+    unsigned int                        mWidth;                 // width after any resizing
+    unsigned int                        mHeight;                // height after any resizing
+    
     bool                                mDimensionsInitialized;
-    int                                 mNumCores;
     unsigned int                        mFramerateNumFrames;
     float                               mFramerateElapsedTime;
     
-    unsigned char                       red[256][256];
-    unsigned char                       blue[256][256];
-    unsigned char                       green[256][256][256];
+    BYTE                                red[256][256];
+    BYTE                                blue[256][256];
+    BYTE                                green[256][256][256];
     
     boost::threadpool::pool             conversion_workers;
-
+    long                                mConversionChunkSize;
+    long                                mConversionChunkSizeLeftover;
 };
